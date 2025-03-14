@@ -1,0 +1,53 @@
+name: Vps Model Gateway Tests
+
+on: [push, pull_request]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest pytest-cov pytest-asyncio
+          if [ -f vps-model-gateway/requirements.txt ]; then pip install -r vps-model-gateway/requirements.txt; fi
+          if [ -f vps-model-gateway/test-requirements.txt ]; then pip install -r vps-model-gateway/test-requirements.txt; fi
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 vps-model-gateway --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          flake8 vps-model-gateway --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Test with pytest and check coverage
+        env:
+          PYTHONPATH: vps-model-gateway
+          SERVER_HOST: 0.0.0.0
+          SERVER_PORT: 8000
+          USER_ADMIN_SERVICE_URL: http://test-user-admin:80
+          DEPLOY_ADMIN_SERVICE_URL: http://test-deploy-admin:80
+          MODEL_KOURIER_SERVICE_URL: http://test-kourier:80
+          TRANSFORMER_KOURIER_SERVICE_URL: http://test-kourier:80
+          PROJECT_ADMIN_SERVICE_URL: http://test-project-admin-service:80
+          PAYMENT_SERVICE_URL: http://test-payment-admin-service:80
+          LOG_LEVEL: INFO
+          REDIS_STARTUP_NODES: [
+              {"host": "testserver1", "port": 6379},
+              {"host": "testserver2", "port": 6379}
+          ]
+          MAX_POST_FILE_SIZE: 500
+          MAX_PAYLOAD_SIZE: 5
+          MAX_RATE_LIMIT: 60
+          RUNTIME_BUCKET_NAME: test-bucket
+          AWS_REGION: test-region
+        run: |
+          pytest --cov=vps-model-gateway --cov-fail-under=75
